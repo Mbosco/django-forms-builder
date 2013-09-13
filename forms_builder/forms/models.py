@@ -165,6 +165,9 @@ class AbstractField(models.Model):
     def __unicode__(self):
         return unicode(self.label)
 
+    def get_max(self):
+        return 5
+
     def get_choices(self):
         """
         Parse a comma separated choice string into a list of choices taking

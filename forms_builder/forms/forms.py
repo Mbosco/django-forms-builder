@@ -136,61 +136,115 @@ class FormForForm(forms.ModelForm):
         super(FormForForm, self).__init__(*args, **kwargs)
         # Create the form fields.
         for field in self.form_fields:
-            field_key = field.slug
-            field_class = fields.CLASSES[field.field_type]
-            field_widget = fields.WIDGETS.get(field.field_type)
-            field_args = {"label": field.label, "required": field.required,
-                          "help_text": field.help_text}
-            arg_names = field_class.__init__.im_func.func_code.co_varnames
-            if "max_length" in arg_names:
-                field_args["max_length"] = settings.FIELD_MAX_LENGTH
-            if "choices" in arg_names:
-                field_args["choices"] = field.get_choices()
-            if field_widget is not None:
-                field_args["widget"] = field_widget
-            #
-            #   Initial value for field, in order of preference:
-            #
-            # - If a form model instance is given (eg we're editing a
-            #   form response), then use the instance's value for the
-            #   field.
-            # - If the developer has provided an explicit "initial"
-            #   dict, use it.
-            # - The default value for the field instance as given in
-            #   the admin.
-            #
-            initial_val = None
-            try:
-                initial_val = field_entries[field.id]
-            except KeyError:
+            if field.field_type == fields.DYNAMIC:
+                maximum_instances = field.get_max()
+                for count in range(maximum_instances):
+                    field_key = field.slug+str(count)
+                    field_class = fields.CLASSES[field.field_type]
+                    field_widget = fields.WIDGETS.get(field.field_type)
+                    field_args = {"label": field.label, "required": field.required,
+                                  "help_text": field.help_text}
+                    arg_names = field_class.__init__.im_func.func_code.co_varnames
+                    if "max_length" in arg_names:
+                        field_args["max_length"] = settings.FIELD_MAX_LENGTH
+                    if "choices" in arg_names:
+                        field_args["choices"] = field.get_choices()
+                    if field_widget is not None:
+                        field_args["widget"] = field_widget
+                    #   Initial value for field, in order of preference:
+                    #
+                    # - If a form model instance is given (eg we're editing a
+                    #   form response), then use the instance's value for the
+                    #   field.
+                    # - If the developer has provided an explicit "initial"
+                    #   dict, use it.
+                    # - The default value for the field instance as given in
+                    #   the admin.
+                    #
+                    initial_val = None
+                    try:
+                        initial_val = field_entries[field.id]
+                    except KeyError:
+                        try:
+                            initial_val = initial[field_key]
+                        except KeyError:
+                            initial_val = Template(field.default).render(context)
+                    if initial_val:
+                        if field.is_a(*fields.MULTIPLE):
+                            initial_val = split_choices(initial_val)
+                        if field.field_type == fields.CHECKBOX:
+                            initial_val = initial_val != "False"
+                        self.initial[field_key] = initial_val
+                    self.fields[field_key] = field_class(**field_args)
+
+                    # Add identifying CSS classes to the field.
+                    css_class = field_class.__name__.lower()
+                    if field.required:
+                        css_class += " required"
+                        if (settings.USE_HTML5 and
+                            field.field_type != fields.CHECKBOX_MULTIPLE):
+                            self.fields[field_key].widget.attrs["required"] = ""
+                    self.fields[field_key].widget.attrs["class"] = css_class
+                    if field.placeholder_text and not field.default:
+                        text = field.placeholder_text
+                        self.fields[field_key].widget.attrs["placeholder"] = text
+
+            else:
+                field_key = field.slug
+                field_class = fields.CLASSES[field.field_type]
+                field_widget = fields.WIDGETS.get(field.field_type)
+                field_args = {"label": field.label, "required": field.required,
+                              "help_text": field.help_text}
+                arg_names = field_class.__init__.im_func.func_code.co_varnames
+                if "max_length" in arg_names:
+                    field_args["max_length"] = settings.FIELD_MAX_LENGTH
+                if "choices" in arg_names:
+                    field_args["choices"] = field.get_choices()
+                if field_widget is not None:
+                    field_args["widget"] = field_widget
+                #
+                #   Initial value for field, in order of preference:
+                #
+                # - If a form model instance is given (eg we're editing a
+                #   form response), then use the instance's value for the
+                #   field.
+                # - If the developer has provided an explicit "initial"
+                #   dict, use it.
+                # - The default value for the field instance as given in
+                #   the admin.
+                #
+                initial_val = None
                 try:
-                    initial_val = initial[field_key]
+                    initial_val = field_entries[field.id]
                 except KeyError:
-                    initial_val = Template(field.default).render(context)
-            if initial_val:
-                if field.is_a(*fields.MULTIPLE):
-                    initial_val = split_choices(initial_val)
-                if field.field_type == fields.CHECKBOX:
-                    initial_val = initial_val != "False"
-                self.initial[field_key] = initial_val
-            self.fields[field_key] = field_class(**field_args)
+                    try:
+                        initial_val = initial[field_key]
+                    except KeyError:
+                        initial_val = Template(field.default).render(context)
+                if initial_val:
+                    if field.is_a(*fields.MULTIPLE):
+                        initial_val = split_choices(initial_val)
+                    if field.field_type == fields.CHECKBOX:
+                        initial_val = initial_val != "False"
+                    self.initial[field_key] = initial_val
+                self.fields[field_key] = field_class(**field_args)
 
-            if field.field_type == fields.DOB:
-                now = datetime.now()
-                years = range(now.year, now.year - 120, -1)
-                self.fields[field_key].widget.years = years
+                if field.field_type == fields.DOB:
+                    now = datetime.now()
+                    years = range(now.year, now.year - 120, -1)
+                    self.fields[field_key].widget.years = years
 
-            # Add identifying CSS classes to the field.
-            css_class = field_class.__name__.lower()
-            if field.required:
-                css_class += " required"
-                if (settings.USE_HTML5 and
-                    field.field_type != fields.CHECKBOX_MULTIPLE):
-                    self.fields[field_key].widget.attrs["required"] = ""
-            self.fields[field_key].widget.attrs["class"] = css_class
-            if field.placeholder_text and not field.default:
-                text = field.placeholder_text
-                self.fields[field_key].widget.attrs["placeholder"] = text
+                # Add identifying CSS classes to the field.
+                css_class = field_class.__name__.lower()
+                if field.required:
+                    css_class += " required"
+                    if (settings.USE_HTML5 and
+                        field.field_type != fields.CHECKBOX_MULTIPLE):
+                        self.fields[field_key].widget.attrs["required"] = ""
+                self.fields[field_key].widget.attrs["class"] = css_class
+                if field.placeholder_text and not field.default:
+                    text = field.placeholder_text
+                    self.fields[field_key].widget.attrs["placeholder"] = text
 
     def save(self, **kwargs):
         """
@@ -204,19 +258,38 @@ class FormForForm(forms.ModelForm):
         entry_fields = entry.fields.values_list("field_id", flat=True)
         new_entry_fields = []
         for field in self.form_fields:
-            field_key = field.slug
-            value = self.cleaned_data[field_key]
-            if value and self.fields[field_key].widget.needs_multipart_form:
-                value = fs.save(join("forms", str(uuid4()), value.name), value)
-            if isinstance(value, list):
-                value = ", ".join([v.strip() for v in value])
-            if field.id in entry_fields:
-                field_entry = entry.fields.get(field_id=field.id)
-                field_entry.value = value
-                field_entry.save()
+            if field.field_type == fields.DYNAMIC:
+                max_instances = field.get_max()
+                entries = []
+                for count in range(max_instances):
+                    field_key = field.slug+str(count)
+                    value = self.cleaned_data[field_key]
+                    if isinstance(value, list):
+                        value = ", ".join([v.strip() for v in value])
+                    if value:
+                        entries.append(value)
+                if field.id in entry_fields:
+                    field_entry = entry.fields.get(field_id=field.id)
+                    field_entry.value = entries
+                    field_entry.save()
+                else:
+                    new = {"entry": entry, "field_id": field.id, "value": entries}
+                    new_entry_fields.append(self.field_entry_model(**new))
             else:
-                new = {"entry": entry, "field_id": field.id, "value": value}
-                new_entry_fields.append(self.field_entry_model(**new))
+                field_key = field.slug
+                value = self.cleaned_data[field_key]
+                if value and self.fields[field_key].widget.needs_multipart_form:
+                    value = fs.save(join("forms", str(uuid4()), value.name), value)
+                if isinstance(value, list):
+                    value = ", ".join([v.strip() for v in value])
+                if field.id in entry_fields:
+                    field_entry = entry.fields.get(field_id=field.id)
+                    field_entry.value = value
+                    field_entry.save()
+                else:
+                    new = {"entry": entry, "field_id": field.id, "value": value}
+                    new_entry_fields.append(self.field_entry_model(**new))
+
         if new_entry_fields:
             if django.VERSION >= (1, 4, 0):
                 self.field_entry_model.objects.bulk_create(new_entry_fields)

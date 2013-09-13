@@ -24,6 +24,7 @@ HIDDEN = 12
 NUMBER = 13
 URL = 14
 DOB = 15
+DYNAMIC = 16
 
 # Names for all available field types.
 NAMES = (
@@ -41,6 +42,7 @@ NAMES = (
     (DATE, _("Date")),
     (DATE_TIME, _("Date/time")),
     (DOB, _("Date of birth")),
+    (DYNAMIC, _("Dynamic field")),
     (HIDDEN, _("Hidden")),
 )
 
@@ -59,6 +61,7 @@ CLASSES = {
     DATE_TIME: forms.DateTimeField,
     DOB: forms.DateField,
     HIDDEN: forms.CharField,
+    DYNAMIC: forms.CharField,
     NUMBER: forms.FloatField,
     URL: forms.URLField,
 }

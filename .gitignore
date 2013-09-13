@@ -3,3 +3,5 @@ ve
 *.egg-info
 
 .DS_Store
+
+.idea
